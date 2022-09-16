@@ -3,6 +3,7 @@ package models
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -72,11 +73,19 @@ func (m *DBModel) Get(id int) (*Movie, error) {
 }
 
 // All returns all movies and error. if any
-func (m *DBModel) All() ([]*Movie, error) {
+// variadic functions in Go
+// accept zero or more arguments in this case 0 parameter or many "int" parameters
+// in this function, we expect 0 or 1 number only
+func (m *DBModel) All(genre ...int) ([]*Movie, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	query := `select id, title, description, year, release_date, rating, runtime, mpaa_rating, created_at, updated_at from movies order by title`
+	where := ""
+	if len(genre) > 0 {
+		where = fmt.Sprintf("where id in (select movie_id from movies_genres where genre_id = %d)", genre[0])
+	}
+
+	query := fmt.Sprintf(`select id, title, description, year, release_date, rating, runtime, mpaa_rating, created_at, updated_at from movies %s order by title`, where)
 
 	rows, err := m.DB.QueryContext(ctx, query)
 
@@ -142,4 +151,39 @@ func (m *DBModel) All() ([]*Movie, error) {
 	}
 
 	return movies, nil
+}
+
+func (m *DBModel) GenresAll() ([]*Genre, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	query := `select id, genre_name, created_at, updated_at from genres order by genre_name`
+
+	rows, err := m.DB.QueryContext(ctx, query)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var genres []*Genre
+
+	for rows.Next() {
+		var g Genre
+
+		err := rows.Scan(
+			&g.ID,
+			&g.GenreName,
+			&g.CreatedAt,
+			&g.UpdatedAt,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+		genres = append(genres, &g)
+	}
+
+	return genres, nil
 }
